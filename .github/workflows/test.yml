@@ -1,0 +1,74 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: [3.8, 3.9, '3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Lint with flake8
+      run: |
+        flake8 api_debugger/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 api_debugger/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Type checking with mypy
+      run: |
+        mypy api_debugger/ || true  # Allow mypy to fail for now
+    
+    - name: Test with pytest
+      run: |
+        pytest tests/ --cov=api_debugger --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  test-optional-dependencies:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        extras: [requests, httpx, rich, django, fastapi, full]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install with ${{ matrix.extras }} extras
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[${{ matrix.extras }}]"
+        pip install pytest pytest-cov
+    
+    - name: Test imports
+      run: |
+        python -c "from api_debugger import APIClient; print('✅ Basic import works')"
+        python -c "from api_debugger import configure; print('✅ Configuration import works')"
